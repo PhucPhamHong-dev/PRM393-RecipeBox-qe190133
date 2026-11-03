@@ -37,7 +37,20 @@ void main() {
       final f = find.byKey(ValueKey(key));
       await tester.ensureVisible(f);
       await tester.enterText(f, value);
-      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 400));
+      final input = tester.widget(f);
+      final controller = input is TextFormField
+          ? input.controller
+          : input is TextField
+          ? input.controller
+          : null;
+      if (controller != null) {
+        expect(
+          controller.text == value,
+          isTrue,
+          reason: 'Input controller mismatch for $key',
+        );
+      }
     }
 
     Future<void> shot(String name) async {
@@ -163,6 +176,10 @@ void main() {
     await tap(find.byKey(const ValueKey('auth_submit')));
     await waitFor(find.byKey(const ValueKey('auth_server_error')));
     await shot('04b_login_error');
+    await tap(find.byTooltip('Back'));
+    await waitFor(find.text('Create your recipe box'));
+    await tap(find.text('Login').first);
+    await enter('auth_email', email);
     await enter('auth_password', password);
     await tap(find.byKey(const ValueKey('auth_submit')));
     await waitFor(find.text('Recipes: 5'));

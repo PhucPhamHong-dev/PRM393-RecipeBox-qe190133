@@ -58,3 +58,6 @@ app.*.map.json
 # Private exam document and integration contracts
 /docs/
 /private/
+
+# Private evidence checklist is delivered separately
+/CHECKLIST.md
