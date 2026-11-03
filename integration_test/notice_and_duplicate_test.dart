@@ -34,6 +34,7 @@ void main() {
 
     Future<void> tap(Finder f) async {
       await wait(f);
+      await settle();
       await tester.ensureVisible(f.first);
       await tester.pump(const Duration(milliseconds: 200));
       await tester.tap(f.first);
@@ -45,6 +46,15 @@ void main() {
       await tester.ensureVisible(f);
       await tester.enterText(f, value);
       await tester.pump(const Duration(milliseconds: 200));
+      final input = tester.widget(f);
+      final controller = input is TextFormField
+          ? input.controller
+          : (input as TextField).controller;
+      expect(
+        controller!.text,
+        value,
+        reason: "Input must be replaced before submitting",
+      );
     }
 
     Future<void> choose(String key, String value) async {
