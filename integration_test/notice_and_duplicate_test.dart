@@ -191,6 +191,7 @@ void main() {
     await shot('21_delete_confirmation');
     await tap(find.widgetWithText(FilledButton, 'Delete'));
     await wait(find.text('Recipes: 5'));
+    await settle();
     expect(
       find.text('Recipe added'),
       findsNothing,
