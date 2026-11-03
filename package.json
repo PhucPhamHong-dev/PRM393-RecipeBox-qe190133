@@ -1,0 +1,12 @@
+{
+  "name": "recipebox-qe190133-rules-tests",
+  "private": true,
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore --project demo-recipebox-qe190133 \"node --test tests/firestore.rules.test.cjs\""
+  },
+  "devDependencies": {
+    "firebase-tools": "15.34.1",
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0"
+  }
+}
