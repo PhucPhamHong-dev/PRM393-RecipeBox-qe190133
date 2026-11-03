@@ -26,6 +26,7 @@ A fresh checkout builds without source edits. The grader account and password ar
 - Category, difficulty, favorites and trimmed case-insensitive name-or-notes search combine immediately.
 - Summary describes visible results: Recipes, Favorites, Total time, then category counts ordered by descending count and fixed category order for ties.
 - Shared form and consistent buttons, inputs, notice and recipe cards.
+- Recipe added is cleared when another action starts, including opening Detail, changing filters, favoriting or starting another add. It cannot linger after editing or deleting a recipe.
 
 ## Database and uniqueness
 
@@ -54,6 +55,8 @@ firebase emulators:exec --only firestore --project demo-recipebox "node --test t
 ```
 
 For live integration evidence, supply a fresh disposable test email and password privately using `--dart-define-from-file`; never commit that file. See the integration test for keys and test variables. App screenshots are captured from a real emulator session and kept outside the public source.
+
+The focused `integration_test/notice_and_duplicate_test.dart` uses the seeded grader account to verify a mixed-case duplicate is rejected with unchanged document IDs and count, and checks that the add notice is absent after edit/delete. It restores the five-record collection after testing.
 
 Deploy the checked-in Rules with the Firebase CLI after signing in to the intended project:
 

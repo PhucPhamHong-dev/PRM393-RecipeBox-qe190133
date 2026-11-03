@@ -55,6 +55,7 @@ class _ListScreenState extends State<ListScreen> {
   void _clear() {
     _search.clear();
     setState(() {
+      _added = false;
       _category = 'All';
       _difficulty = 'All';
       _favoritesOnly = false;
@@ -62,6 +63,7 @@ class _ListScreenState extends State<ListScreen> {
   }
 
   Future<void> _favorite(Recipe r) async {
+    setState(() => _added = false);
     try {
       await widget.repository.toggleFavorite(r);
       if (mounted) setState(() => _error = null);
@@ -88,7 +90,12 @@ class _ListScreenState extends State<ListScreen> {
       ...options,
     ].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
     onChanged: (v) {
-      if (v != null) setState(() => changed(v));
+      if (v != null) {
+        setState(() {
+          _added = false;
+          changed(v);
+        });
+      }
     },
   );
   @override
@@ -202,6 +209,9 @@ class _ListScreenState extends State<ListScreen> {
                       child: ExpansionTile(
                         key: const ValueKey('add_recipe_expansion'),
                         controller: _addController,
+                        onExpansionChanged: (expanded) {
+                          if (expanded) setState(() => _added = false);
+                        },
                         maintainState: true,
                         shape: const Border(),
                         collapsedShape: const Border(),
@@ -216,8 +226,13 @@ class _ListScreenState extends State<ListScreen> {
                         ),
                         children: [
                           RecipeForm(
-                            onSubmit: (draft) =>
-                                widget.repository.add(widget.user.uid, draft),
+                            onSubmit: (draft) async {
+                              setState(() => _added = false);
+                              await widget.repository.add(
+                                widget.user.uid,
+                                draft,
+                              );
+                            },
                             onSuccess: () {
                               setState(() => _added = true);
                               _addController.collapse();
@@ -256,7 +271,7 @@ class _ListScreenState extends State<ListScreen> {
                               labelText: 'Search name or notes',
                               prefixIcon: Icon(Icons.search_rounded),
                             ),
-                            onChanged: (_) => setState(() {}),
+                            onChanged: (_) => setState(() => _added = false),
                           ),
                           const SizedBox(height: 14),
                           LayoutBuilder(
@@ -299,8 +314,10 @@ class _ListScreenState extends State<ListScreen> {
                             contentPadding: EdgeInsets.zero,
                             title: const Text('Favorites only'),
                             value: _favoritesOnly,
-                            onChanged: (v) =>
-                                setState(() => _favoritesOnly = v),
+                            onChanged: (v) => setState(() {
+                              _added = false;
+                              _favoritesOnly = v;
+                            }),
                           ),
                         ],
                       ),
@@ -356,14 +373,17 @@ class _ListScreenState extends State<ListScreen> {
                         margin: EdgeInsets.zero,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(18),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => DetailScreen(
-                                recipe: recipe,
-                                repository: widget.repository,
+                          onTap: () {
+                            setState(() => _added = false);
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => DetailScreen(
+                                  recipe: recipe,
+                                  repository: widget.repository,
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          },
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(12, 14, 4, 14),
                             child: Row(
