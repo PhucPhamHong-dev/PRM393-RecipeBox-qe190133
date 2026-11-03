@@ -7,24 +7,39 @@ service cloud.firestore {
     function owns(data) {
       return signedIn() && data.userId == request.auth.uid;
     }
-    // One recipe name per owner, independent of case and surrounding spaces.
+    // Pinned Unicode 15.0.0 SIMPLE case folding (C/S) is used by the client.
+    // This guard excludes every noncanonical source, including long s/final sigma.
+    // Uppercase ASCII E is excluded, so a key cannot contain the RE2 quote terminator.
+    // RE2 uses an older fold table for these nine historical Cyrillic letters.
+    function compatibleName(name) {
+      return name.replace('ᲀ', 'в').replace('ᲁ', 'д').replace('ᲂ', 'о')
+        .replace('ᲃ', 'с').replace('ᲄ', 'т').replace('ᲅ', 'т')
+        .replace('ᲆ', 'ъ').replace('ᲇ', 'ѣ').replace('ᲈ', 'ꙋ');
+    }
+    function canonicalNameKey(data) {
+      return data.nameKey is string
+        && data.nameKey.matches('[^A-ZµÀ-ÖØ-ÞĀĂĄĆĈĊČĎĐĒĔĖĘĚĜĞĠĢĤĦĨĪĬĮĲĴĶĹĻĽĿŁŃŅŇŊŌŎŐŒŔŖŘŚŜŞŠŢŤŦŨŪŬŮŰŲŴŶŸŹŻŽſƁƂƄƆƇƉ-ƋƎ-ƑƓƔƖ-ƘƜƝƟƠƢƤƦƧƩƬƮƯƱ-ƳƵƷƸƼǄǅǇǈǊǋǍǏǑǓǕǗǙǛǞǠǢǤǦǨǪǬǮǱǲǴǶ-ǸǺǼǾȀȂȄȆȈȊȌȎȐȒȔȖȘȚȜȞȠȢȤȦȨȪȬȮȰȲȺȻȽȾɁɃ-ɆɈɊɌɎͅͰͲͶͿΆΈ-ΊΌΎΏΑ-ΡΣ-ΫςϏ-ϑϕϖϘϚϜϞϠϢϤϦϨϪϬϮϰϱϴϵϷϹϺϽ-ЯѠѢѤѦѨѪѬѮѰѲѴѶѸѺѼѾҀҊҌҎҐҒҔҖҘҚҜҞҠҢҤҦҨҪҬҮҰҲҴҶҸҺҼҾӀӁӃӅӇӉӋӍӐӒӔӖӘӚӜӞӠӢӤӦӨӪӬӮӰӲӴӶӸӺӼӾԀԂԄԆԈԊԌԎԐԒԔԖԘԚԜԞԠԢԤԦԨԪԬԮԱ-ՖႠ-ჅჇჍᏸ-ᏽᲀ-ᲈᲐ-ᲺᲽ-ᲿḀḂḄḆḈḊḌḎḐḒḔḖḘḚḜḞḠḢḤḦḨḪḬḮḰḲḴḶḸḺḼḾṀṂṄṆṈṊṌṎṐṒṔṖṘṚṜṞṠṢṤṦṨṪṬṮṰṲṴṶṸṺṼṾẀẂẄẆẈẊẌẎẐẒẔẛẞẠẢẤẦẨẪẬẮẰẲẴẶẸẺẼẾỀỂỄỆỈỊỌỎỐỒỔỖỘỚỜỞỠỢỤỦỨỪỬỮỰỲỴỶỸỺỼỾἈ-ἏἘ-ἝἨ-ἯἸ-ἿὈ-ὍὙὛὝὟὨ-Ὧᾈ-ᾏᾘ-ᾟᾨ-ᾯᾸ-ᾼιῈ-ῌῘ-ΊῨ-ῬῸ-ῼΩKÅℲⅠ-ⅯↃⒶ-ⓏⰀ-ⰯⱠⱢ-ⱤⱧⱩⱫⱭ-ⱰⱲⱵⱾ-ⲀⲂⲄⲆⲈⲊⲌⲎⲐⲒⲔⲖⲘⲚⲜⲞⲠⲢⲤⲦⲨⲪⲬⲮⲰⲲⲴⲶⲸⲺⲼⲾⳀⳂⳄⳆⳈⳊⳌⳎⳐⳒⳔⳖⳘⳚⳜⳞⳠⳢⳫⳭⳲꙀꙂꙄꙆꙈꙊꙌꙎꙐꙒꙔꙖꙘꙚꙜꙞꙠꙢꙤꙦꙨꙪꙬꚀꚂꚄꚆꚈꚊꚌꚎꚐꚒꚔꚖꚘꚚꜢꜤꜦꜨꜪꜬꜮꜲꜴꜶꜸꜺꜼꜾꝀꝂꝄꝆꝈꝊꝌꝎꝐꝒꝔꝖꝘꝚꝜꝞꝠꝢꝤꝦꝨꝪꝬꝮꝹꝻꝽꝾꞀꞂꞄꞆꞋꞍꞐꞒꞖꞘꞚꞜꞞꞠꞢꞤꞦꞨꞪ-ꞮꞰ-ꞴꞶꞸꞺꞼꞾꟀꟂꟄ-ꟇꟉꟐꟖꟘꟵꭰ-ꮿＡ-Ｚ𐐀-𐐧𐒰-𐓓𐕰-𐕺𐕼-𐖊𐖌-𐖒𐖔𐖕𐲀-𐲲𑢠-𑢿𖹀-𖹟𞤀-𞤡]*')
+        && compatibleName(data.name.trim()).matches('(?i)\\Q' + data.nameKey + '\\E');
+    }
+    // One recipe name per owner, independent of Unicode letter case.
     function canonicalId(data) {
       return data.userId + '_'
-        + hashing.sha256(data.name.trim().lower()).toHexString().lower();
+        + hashing.sha256(data.nameKey).toHexString().lower();
     }
     function validRecipe(data, recipeId) {
       return data.keys().hasAll([
           'id', 'userId', 'name', 'category', 'difficulty', 'cookTime',
-          'favorite', 'createdAt'
+          'favorite', 'createdAt', 'nameKey'
         ])
         && data.keys().hasOnly([
           'id', 'userId', 'name', 'category', 'difficulty', 'cookTime',
-          'servings', 'favorite', 'notes', 'createdAt'
+          'servings', 'favorite', 'notes', 'createdAt', 'nameKey'
         ])
         && data.id is string && data.id == recipeId
         && data.userId is string && owns(data)
         && data.name is string
         && data.name.trim().size() > 0 && data.name.size() <= 80
+        && canonicalNameKey(data)
         && data.category in ['Breakfast', 'Lunch', 'Dinner', 'Dessert']
         && data.difficulty in ['Easy', 'Medium', 'Hard']
         && data.cookTime is int && data.cookTime >= 1 && data.cookTime <= 600

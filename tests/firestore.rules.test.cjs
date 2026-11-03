@@ -6,10 +6,13 @@ const { createHash } = require('node:crypto');
 const { initializeTestEnvironment, assertSucceeds, assertFails } = require('@firebase/rules-unit-testing');
 const { doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, collection, query, where, writeBatch, serverTimestamp, Timestamp } = require('firebase/firestore');
 let env;
-const idFor = (uid, name) => `${uid}_${createHash('sha256').update(name.trim().toLowerCase()).digest('hex')}`;
+const foldSource = fs.readFileSync(path.join(__dirname, '../lib/models/unicode_casefold.dart'), 'utf8');
+const folds = new Map([...foldSource.matchAll(/0x([A-F0-9]+): 0x([A-F0-9]+)/g)].map(m => [parseInt(m[1],16),parseInt(m[2],16)]));
+const nameKeyFor = name => [...name.trim()].map(c=>String.fromCodePoint(folds.get(c.codePointAt(0)) ?? c.codePointAt(0))).join('');
+const idFor = (uid, name) => `${uid}_${createHash('sha256').update(nameKeyFor(name)).digest('hex')}`;
 const recipe = (uid = 'alice', overrides = {}) => {
   const data = { userId: uid, name: 'Pho Bo', category: 'Lunch', difficulty: 'Medium', cookTime: 60, servings: null, favorite: false, notes: '', createdAt: serverTimestamp(), ...overrides };
-  return { ...data, id: idFor(uid, typeof data.name === 'string' ? data.name : 'Pho Bo') };
+  return { ...data, nameKey: nameKeyFor(typeof data.name === 'string' ? data.name : 'Pho Bo'), id: idFor(uid, typeof data.name === 'string' ? data.name : 'Pho Bo') };
 };
 const db = (uid = 'alice') => env.authenticatedContext(uid).firestore();
 before(async () => {
@@ -63,7 +66,7 @@ for (const [label, overrides] of [
   });
 }
 test('missing required fields are refused', async () => {
-  for (const key of ['id','userId','name','category','difficulty','cookTime','favorite','createdAt']) {
+  for (const key of ['id','userId','name','category','difficulty','cookTime','favorite','createdAt','nameKey']) {
     const data=recipe(); const id=data.id; delete data[key];
     await assertFails(setDoc(doc(db(),'recipes',id),data));
   }
@@ -88,7 +91,7 @@ test('different people may save the same recipe name', async () => {
 });
 test('rename is atomic and preserves original creation time',async()=>{
   const store=db(),original=recipe(),oldRef=doc(store,'recipes',original.id);await setDoc(oldRef,original);
-  const saved=(await getDoc(oldRef)).data();const renamed={...saved,name:'Pho Ga'};renamed.id=idFor('alice',renamed.name);
+  const saved=(await getDoc(oldRef)).data();const renamed={...saved,name:'Pho Ga',nameKey:nameKeyFor('Pho Ga')};renamed.id=idFor('alice',renamed.name);
   const batch=writeBatch(store);batch.set(doc(store,'recipes',renamed.id),renamed);batch.delete(oldRef);await assertSucceeds(batch.commit());
   assert.equal((await getDoc(oldRef)).exists(),false);
   assert.equal((await getDoc(doc(store,'recipes',renamed.id))).data().createdAt.toMillis(),saved.createdAt.toMillis());
@@ -100,3 +103,32 @@ test('creation time and owner cannot be changed',async()=>{
 test('unrelated collections remain denied',async()=>{
   await assertFails(setDoc(doc(db(),'users','alice'),{name:'Alice'}));await assertFails(getDoc(doc(db(),'users','alice')));
 });
+
+for (const [upper, lower] of [['PHỞ BÒ','phở bò'],['Éclair','éclair'],['ĐẬU','đậu'],['Σ','ς'],['S','ſ'],['Μ','µ'],['ẞ','ß']]) {
+ test(`Unicode name succeeds and direct alternate-key duplicate is refused: ${upper}`,async()=>{
+  const store=db(),first=recipe('alice',{name:upper});await assertSucceeds(setDoc(doc(store,'recipes',first.id),first));
+  const second=recipe('alice',{name:lower});assert.equal(first.id,second.id);
+  const alternate=lower.trim();const badId=`alice_${createHash('sha256').update(alternate).digest('hex')}`;
+  if(alternate!==nameKeyFor(lower))await assertFails(setDoc(doc(store,'recipes',badId),{...second,id:badId,nameKey:alternate}));
+  await assertFails(setDoc(doc(store,'recipes',first.id),second));
+  assert.equal((await getDocs(query(collection(store,'recipes'),where('userId','==','alice')))).size,1);
+ });
+}
+for(const name of ['İstanbul','Soup (A+B) [2].*?^$|\\x','A\\E.*B','Emoji 🍲 soup','e\u0301clair']) {
+ test(`Valid literal Unicode/punctuation name: ${name}`,async()=>{
+  const data=recipe('alice',{name});await assertSucceeds(setDoc(doc(db(),'recipes',data.id),data));
+ });
+}
+test('forged nameKey cannot redirect the name to a different canonical ID',async()=>{
+ for(const key of ['eclair','Éclair','a.*','bad\\E.*\\Q']){
+  const data=recipe('alice',{name:'Éclair'});data.nameKey=key;data.id=`alice_${createHash('sha256').update(key).digest('hex')}`;
+  if(key!==nameKeyFor(data.name))await assertFails(setDoc(doc(db(),'recipes',data.id),data));
+ }
+});
+
+for(const [source,target] of [['ᲀ','в'],['ᲁ','д'],['ᲂ','о'],['ᲃ','с'],['ᲄ','т'],['ᲅ','т'],['ᲆ','ъ'],['ᲇ','ѣ'],['ᲈ','ꙋ']]){
+ test(`historical Cyrillic case-fold compatibility ${source}`,async()=>{
+  const first=recipe('alice',{name:source});assert.equal(first.nameKey,target);await assertSucceeds(setDoc(doc(db(),'recipes',first.id),first));
+  const invalid={...first,nameKey:source,id:`alice_${createHash('sha256').update(source).digest('hex')}`};await assertFails(setDoc(doc(db(),'recipes',invalid.id),invalid));
+ });
+}

@@ -61,6 +61,7 @@ class RecipeRepository {
         ...current.data()!,
         'id': id,
         'name': draft.name.trim(),
+        'nameKey': canonicalRecipeName(draft.name),
         'category': draft.category,
         'difficulty': draft.difficulty,
         'cookTime': draft.cookTime,

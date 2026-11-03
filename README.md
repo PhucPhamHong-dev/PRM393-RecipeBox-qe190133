@@ -30,9 +30,9 @@ A fresh checkout builds without source edits. The grader account and password ar
 
 ## Database and uniqueness
 
-Only the top-level `recipes` collection stores application data. Fields are exactly `id`, `userId`, `name`, `category`, `difficulty`, `cookTime`, `servings`, `favorite`, `notes`, `createdAt`.
+Only the top-level `recipes` collection stores application data. Required exam fields are `id`, `userId`, `name`, `category`, `difficulty`, `cookTime`, `servings`, `favorite`, `notes`, `createdAt`; the additional validated `nameKey` field enforces Unicode case-insensitive uniqueness.
 
-Document ID = Firebase Auth UID + `_` + lowercase SHA-256 hex of `name.trim().toLowerCase()`. Rules independently recompute this ID, so a client cannot insert duplicate case-insensitive names under arbitrary IDs. Different users have separate IDs. Changing a name performs an atomic create/delete transaction while preserving the creation date and favorite flag.
+Document ID = Firebase Auth UID + `_` + lowercase SHA-256 hex of `canonicalRecipeName(name)`. The additional required `nameKey` field uses a pinned Unicode 15.0.0 SIMPLE case-fold table (C/S entries), preserving accents. Rules validate the canonical key, compare it literally with the name using Unicode case-insensitive matching, and independently recompute the ID. This prevents a client from inserting case variants under alternate IDs. Different users have separate IDs. Changing a name performs an atomic create/delete transaction while preserving the creation date and favorite flag.
 
 `cookTime` is an integer from 1 through 600. `servings` is absent/null or an integer from 1 through 20. Notes default to an empty string. Creation uses a server timestamp. Rules validate all fields, ownership, allowed categories and difficulties, and deny access to every other collection. Existing documents can only be read or mutated by their owner. Authenticated transactions may check that a target ID does not yet exist.
 
@@ -65,3 +65,5 @@ firebase deploy --only firestore --project recipebox-qe190133
 ```
 
 The private `submission` directory contains the required student-code Word report and clean source ZIP. `pubspec.yaml` is at the archive root; build/cache, Git metadata, reports and admin keys are excluded.
+
+Unicode folding follows SIMPLE case equivalence. Accents are preserved: Pho and Phở are different names. NFC and decomposed spellings are not merged; case variants within either spelling share one ID. Unicode data is bundled with its license; no external normalization service or admin key is used. Direct recipe creates must supply the canonical nameKey and corresponding id, as demonstrated in the Rules tests.

@@ -3,10 +3,13 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 
+import 'unicode_casefold.dart';
+export 'unicode_casefold.dart' show canonicalRecipeName;
+
 const recipeCategories = ['Breakfast', 'Lunch', 'Dinner', 'Dessert'];
 const recipeDifficulties = ['Easy', 'Medium', 'Hard'];
 String canonicalRecipeId(String userId, String name) =>
-    '${userId}_${sha256.convert(utf8.encode(name.trim().toLowerCase()))}';
+    '${userId}_${sha256.convert(utf8.encode(canonicalRecipeName(name)))}';
 
 class Recipe {
   const Recipe({
@@ -45,6 +48,7 @@ class Recipe {
     'id': id,
     'userId': userId,
     'name': name,
+    'nameKey': canonicalRecipeName(name),
     'category': category,
     'difficulty': difficulty,
     'cookTime': cookTime,
